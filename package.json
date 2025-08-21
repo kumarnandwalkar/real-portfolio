@@ -1,0 +1,20 @@
+{
+  "name": "on-demand-project-orchestrator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portfolio orchestrator that starts containerized projects on demand",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2",
+    "simple-git": "^3.24.0",
+    "uuid": "^9.0.1"
+  }
+}
+
+

@@ -1,0 +1,18 @@
+services:
+  orchestrator:
+    build: .
+    container_name: portfolio-orchestrator
+    environment:
+      - PORT=8088
+      - JWT_SECRET=${JWT_SECRET:-change_me_strong}
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./projects:/app/projects
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  # not used; bind mount above keeps repos on host folder
+
+

@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Projects - On-Demand</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; background: #0b1020; color: #e6ebff; }
+      h1 { margin: 0 0 16px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+      .card { background: #121937; border: 1px solid #273059; border-radius: 12px; padding: 16px; }
+      .name { font-weight: 600; font-size: 18px; margin-bottom: 8px; }
+      .actions { display: flex; gap: 8px; margin-top: 12px; }
+      button { background: #3a5bf2; border: none; color: white; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+      button.secondary { background: #2b335b; }
+      .status { font-size: 12px; color: #a7b3ff; margin-top: 8px; }
+      .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+      .running { background: #1d4ed8; }
+      .stopped { background: #374151; }
+      .idle { background: #374151; }
+      .missing { background: #7c2d12; }
+    </style>
+  </head>
+  <body>
+    <h1>Portfolio Projects (On-Demand)</h1>
+    <p>Click Start to spin up a project on this server. Only one runs at a time.</p>
+    <div id="list" class="grid"></div>
+    <script>
+      async function stopAll() {
+        try { await fetch('/api/projects/stop-all', { method: 'POST' }); } catch {}
+      }
+      async function fetchProjects() {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        return data.projects;
+      }
+      async function startProject(id) {
+        const btn = document.querySelector(`#start-${id}`);
+        btn.disabled = true; btn.textContent = 'Starting...';
+        try {
+          const res = await fetch(`/api/projects/${id}/start`, { method: 'POST' });
+          if (!res.ok) {
+            let msg = 'Failed to start';
+            try { const t = await res.text(); msg = t || msg; } catch {}
+            alert(msg);
+            return;
+          }
+          await render();
+        } catch (e) { alert(e.message || 'Failed to start'); }
+        finally { btn.disabled = false; btn.textContent = 'Start'; }
+      }
+      async function stopProject(id) {
+        const btn = document.querySelector(`#stop-${id}`);
+        btn.disabled = true; btn.textContent = 'Stopping...';
+        try {
+          const res = await fetch(`/api/projects/${id}/stop`, { method: 'POST' });
+          if (!res.ok) throw new Error('Failed to stop');
+          await render();
+        } catch (e) { alert(e.message); }
+        finally { btn.disabled = false; btn.textContent = 'Stop'; }
+      }
+      function card(project) {
+        const tagClass = project.status.state || 'unknown';
+        return `
+          <div class="card">
+            <div class="name">${project.name}</div>
+            <div class="tag ${tagClass}">${tagClass}</div>
+            <div class="actions">
+              <button id="start-${project.id}" onclick="startProject('${project.id}')">Start</button>
+              <button id="stop-${project.id}" class="secondary" onclick="stopProject('${project.id}')">Stop</button>
+              <a href="${project.openUrl}" target="_blank"><button class="secondary">Open</button></a>
+            </div>
+            <div class="status">${project.status.message || ''}</div>
+          </div>
+        `;
+      }
+      async function render() {
+        const container = document.getElementById('list');
+        container.innerHTML = 'Loading...';
+        const items = await fetchProjects();
+        container.innerHTML = items.map(card).join('');
+      }
+      render();
+      // When user navigates back or refocuses the main page, stop all to save resources
+      window.addEventListener('focus', stopAll);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') stopAll();
+      });
+      setInterval(render, 8000);
+    </script>
+  </body>
+</html>
+
+
