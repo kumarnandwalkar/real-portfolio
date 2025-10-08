@@ -1,10 +1,16 @@
+// server/utils/docker.js
+
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import Docker from 'dockerode';
+import stream from 'stream';
+import { addLog } from './logger.js';
+
+const docker = new Docker();
 
 function runCmd(cmd, args, options = {}) {
   return new Promise((resolve, reject) => {
-    // Use direct exec (no shell) for better Windows compatibility
     const child = spawn(cmd, args, { stdio: 'pipe', shell: false, ...options });
     let stdout = '';
     let stderr = '';
@@ -17,13 +23,35 @@ function runCmd(cmd, args, options = {}) {
   });
 }
 
+// --- THIS IS THE CORRECT, MERGED FUNCTION ---
 export async function composeUpBuild(project) {
-  const composePath = path.isAbsolute(project.composeFile)
-    ? project.composeFile
-    : path.join(project.workdir, project.composeFile);
-  const env = { ...process.env, ...(project.env || {}) };
-  const args = ['compose', '-f', composePath, 'up', '-d', '--build'];
-  await runCmd('docker', args, { env, cwd: project.workdir });
+    addLog('orchestrator', `Starting project: ${project.name}`);
+    
+    // Logic from your original function to run compose
+    const composePath = path.isAbsolute(project.composeFile)
+      ? project.composeFile
+      : path.join(project.workdir, project.composeFile);
+    const env = { ...process.env, ...(project.env || {}) };
+    const args = ['compose', '-f', composePath, 'up', '-d', '--build'];
+    await runCmd('docker', args, { env, cwd: project.workdir });
+
+    // Logic to find and attach logs after the command succeeds
+    try {
+        const containers = await docker.listContainers({
+            filters: { label: [`com.docker.compose.project=${project.id}`] },
+        });
+
+        if (containers.length > 0) {
+            addLog('orchestrator', `Found ${containers.length} containers for ${project.name}. Attaching logs...`);
+            containers.forEach(containerInfo => {
+                const container = docker.getContainer(containerInfo.Id);
+                const serviceName = containerInfo.Labels['com.docker.compose.service'];
+                attachToContainerLogs(container, `${project.id}-${serviceName}`);
+            });
+        }
+    } catch (e) {
+        addLog('orchestrator-error', `Could not attach logs for compose project ${project.name}: ${e.message}`);
+    }
 }
 
 export async function composeDown(project, options = {}) {
@@ -38,13 +66,12 @@ export async function composeDown(project, options = {}) {
   if (options.removeVolumes) {
     args.push('--volumes');
   }
-  if (!fs.existsSync(composePath)) return; // nothing to stop yet
+  if (!fs.existsSync(composePath)) return;
   await runCmd('docker', args, { env, cwd: project.workdir });
 }
 
 export async function getProjectStatus(project) {
   try {
-    // Consider running if any service is up from this compose file
     const composePath = path.isAbsolute(project.composeFile)
       ? project.composeFile
       : path.join(project.workdir, project.composeFile);
@@ -66,11 +93,30 @@ export async function getProjectStatus(project) {
   }
 }
 
+function attachToContainerLogs(container, logSourceName) {
+    container.logs({
+        follow: true,
+        stdout: true,
+        stderr: true,
+    }, (err, logStream) => {
+        if (err) {
+            return addLog('orchestrator-error', `Error attaching to ${logSourceName} logs: ${err.message}`);
+        }
+        logStream.on('data', chunk => {
+            const logMessage = chunk.toString('utf8').replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+            if (logMessage) {
+                addLog(logSourceName, logMessage);
+            }
+        });
+        logStream.on('end', () => {
+            addLog('orchestrator', `${logSourceName} log stream ended.`);
+        });
+    });
+}
+
 export async function stopAllExcept(projectId, projects) {
   const others = projects.filter(p => p.id !== projectId);
   for (const p of others) {
     try { await composeDown(p); } catch { /* ignore */ }
   }
 }
-
-

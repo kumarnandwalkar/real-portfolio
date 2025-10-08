@@ -8,24 +8,47 @@
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; background: #0b1020; color: #e6ebff; }
       h1 { margin: 0 0 16px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-      .card { background: #121937; border: 1px solid #273059; border-radius: 12px; padding: 16px; }
-      .name { font-weight: 600; font-size: 18px; margin-bottom: 8px; }
+      .card { background: #121937; border: 1px solid #273059; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; }
+      .name-status { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+      .name { font-weight: 600; font-size: 18px; }
+      .health-dot { width: 10px; height: 10px; border-radius: 50%; }
+      .health-dot.healthy { background-color: #22c55e; } /* Green */
+      .health-dot.unhealthy { background-color: #ef4444; } /* Red */
       .actions { display: flex; gap: 8px; margin-top: 12px; }
-      button { background: #3a5bf2; border: none; color: white; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+      button { background: #3a5bf2; border: none; color: white; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; }
       button.secondary { background: #2b335b; }
-      .status { font-size: 12px; color: #a7b3ff; margin-top: 8px; }
-      .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+      button:disabled { background: #374151; cursor: not-allowed; opacity: 0.6; }
+      .status { font-size: 12px; color: #a7b3ff; margin-top: 8px; min-height: 16px; }
+      .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; margin-bottom: 8px; }
       .running { background: #1d4ed8; }
       .stopped { background: #374151; }
       .idle { background: #374151; }
       .missing { background: #7c2d12; }
+
+      /* --- NEW STYLES FOR THE LOG VIEWER --- */
+      .log-container { background: #0c1229; border: 1px solid #273059; border-radius: 12px; margin-top: 24px; max-height: 400px; display: flex; flex-direction: column; }
+      .log-header { padding: 12px; border-bottom: 1px solid #273059; font-weight: 600; }
+      .log-area { font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 12px; margin: 0; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+      .log-entry { margin-bottom: 4px; line-height: 1.4; }
+      .log-source { font-weight: bold; margin-right: 8px; }
+      .log-timestamp { color: #8892d5; margin-right: 8px; }
+      .log-message { color: #c3c9e9; }
     </style>
   </head>
   <body>
     <h1>Portfolio Projects (On-Demand)</h1>
     <p>Click Start to spin up a project on this server. Only one runs at a time.</p>
     <div id="list" class="grid"></div>
+
+    <div class="log-container">
+      <div class="log-header">Live Log Stream</div>
+      <pre id="log-area" class="log-area"></pre>
+    </div>
+
     <script>
+      const projectContainer = document.getElementById('list');
+      const logArea = document.getElementById('log-area');
+
       async function stopAll() {
         try { await fetch('/api/projects/stop-all', { method: 'POST' }); } catch {}
       }
@@ -41,13 +64,14 @@
           const res = await fetch(`/api/projects/${id}/start`, { method: 'POST' });
           if (!res.ok) {
             let msg = 'Failed to start';
-            try { const t = await res.text(); msg = t || msg; } catch {}
+            try { 
+              const errorData = await res.json();
+              msg = errorData.error || msg; 
+            } catch {}
             alert(msg);
-            return;
           }
-          await render();
+          await updateUI(); // Update immediately
         } catch (e) { alert(e.message || 'Failed to start'); }
-        finally { btn.disabled = false; btn.textContent = 'Start'; }
       }
       async function stopProject(id) {
         const btn = document.querySelector(`#stop-${id}`);
@@ -55,40 +79,79 @@
         try {
           const res = await fetch(`/api/projects/${id}/stop`, { method: 'POST' });
           if (!res.ok) throw new Error('Failed to stop');
-          await render();
+          await updateUI(); // Update immediately
         } catch (e) { alert(e.message); }
-        finally { btn.disabled = false; btn.textContent = 'Stop'; }
       }
       function card(project) {
         const tagClass = project.status.state || 'unknown';
+        const healthClass = project.health.healthy ? 'healthy' : 'unhealthy';
+        const isRunning = project.status.state === 'running';
+
         return `
           <div class="card">
-            <div class="name">${project.name}</div>
+            <div class="name-status">
+              <div class="name">${project.name}</div>
+              ${isRunning ? `<div class="health-dot ${healthClass}" title="${project.health.healthy ? 'Healthy' : 'Unhealthy'}"></div>` : ''}
+            </div>
             <div class="tag ${tagClass}">${tagClass}</div>
             <div class="actions">
-              <button id="start-${project.id}" onclick="startProject('${project.id}')">Start</button>
-              <button id="stop-${project.id}" class="secondary" onclick="stopProject('${project.id}')">Stop</button>
-              <a href="${project.openUrl}" target="_blank"><button class="secondary">Open</button></a>
+              <button id="start-${project.id}" onclick="startProject('${project.id}')" ${isRunning ? 'disabled' : ''}>Start</button>
+              <button id="stop-${project.id}" class="secondary" onclick="stopProject('${project.id}')" ${!isRunning ? 'disabled' : ''}>Stop</button>
+              <a href="${project.openUrl}" target="_blank"><button class="secondary" ${!isRunning ? 'disabled' : ''}>Open</button></a>
             </div>
             <div class="status">${project.status.message || ''}</div>
           </div>
         `;
       }
-      async function render() {
-        const container = document.getElementById('list');
-        container.innerHTML = 'Loading...';
-        const items = await fetchProjects();
-        container.innerHTML = items.map(card).join('');
+      
+      async function renderProjects() {
+        try {
+            const items = await fetchProjects();
+            projectContainer.innerHTML = items.map(card).join('');
+        } catch (e) {
+            projectContainer.innerHTML = 'Error loading projects. Is the server running?';
+        }
       }
-      render();
-      // When user navigates back or refocuses the main page, stop all to save resources
-      window.addEventListener('focus', stopAll);
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') stopAll();
-      });
-      setInterval(render, 8000);
+
+      // --- NEW LOG RENDERING LOGIC ---
+      function getSourceColor(source) {
+        let hash = 0;
+        for (let i = 0; i < source.length; i++) {
+          hash = source.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return `hsl(${hash % 360}, 70%, 65%)`;
+      }
+
+      async function renderLogs() {
+        try {
+          const res = await fetch('/api/logs');
+          const logs = await res.json();
+          logArea.innerHTML = logs.map(log => {
+            const time = new Date(log.timestamp).toLocaleTimeString();
+            const color = getSourceColor(log.source);
+            const message = log.message.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Sanitize HTML
+            return `<div class="log-entry"><span class="log-timestamp">${time}</span><span class="log-source" style="color: ${color}">[${log.source}]</span> <span class="log-message">${message}</span></div>`;
+          }).join('');
+          logArea.scrollTop = logArea.scrollHeight; // Auto-scroll to bottom
+        } catch (e) {
+          logArea.innerHTML = 'Could not fetch logs.';
+        }
+      }
+      
+      // --- UNIFIED UPDATE FUNCTION ---
+      async function updateUI() {
+        await Promise.all([
+            renderProjects(),
+            renderLogs()
+        ]);
+      }
+
+      // Initial render
+      projectContainer.innerHTML = 'Loading...';
+      updateUI();
+      
+      // Periodically update to keep the status fresh
+      setInterval(updateUI, 5000); // Polls every 5 seconds
     </script>
   </body>
 </html>
-
-

@@ -13,7 +13,8 @@
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
     "simple-git": "^3.24.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "dockerode": "^4.0.9"
   }
 }
 
