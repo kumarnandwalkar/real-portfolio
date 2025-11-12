@@ -22,7 +22,7 @@ const projects = [
     repo: 'https://github.com/kumarnandwalkar/Working-YT-Clone.git',
     workdir: path.join(baseDir, 'Working-YT-Clone'),
     composeFile: 'docker-compose.yml',
-    openUrl: 'http://localhost:4000',
+    openUrl: 'http://3.6.73.201:4000',
     env: {
       JWT_SECRET: process.env.JWT_SECRET || 'change_me_strong'
     }
@@ -35,7 +35,7 @@ const projects = [
     composeFile: 'docker-compose.yml',
     openUrl: 'http://localhost:8080',
     env: {
-      CORS_ORIGIN: 'http://localhost:8080'
+      CORS_ORIGIN: 'http://3.6.73.201:8080'
     }
   },
   {
@@ -44,7 +44,7 @@ const projects = [
     repo: 'https://github.com/kumarnandwalkar/meeting-summarizer.git',
     workdir: path.join(baseDir, 'meeting-summarizer'),
     composeFile: 'docker-compose.yml',
-    openUrl: 'http://localhost:5173'
+    openUrl: 'http://3.6.73.201:5173'
   }
 ];
 
