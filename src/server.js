@@ -83,5 +83,5 @@ app.post('/api/projects/stop-all', async (req, res) => {
 
 const PORT = process.env.PORT || 8088;
 app.listen(PORT, () => {
-    addLog('orchestrator', `Server listening on http://localhost:${PORT}`);
+    addLog('orchestrator', `Server listening on http://3.6.73.201:${PORT}`);
 });
