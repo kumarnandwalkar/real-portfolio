@@ -33,7 +33,7 @@ const projects = [
     repo: 'https://github.com/kumarnandwalkar/MERN-Chat-Calling-Application.git',
     workdir: path.join(baseDir, 'MERN-Chat-Calling-Application'),
     composeFile: 'docker-compose.yml',
-    openUrl: 'http://localhost:8080',
+    openUrl: 'http://3.6.73.201:8080',
     env: {
       CORS_ORIGIN: 'http://3.6.73.201:8080'
     }
